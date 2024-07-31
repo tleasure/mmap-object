@@ -7,8 +7,11 @@
         "cell.cc"
       ],
       "include_dirs": [
-        # "/usr/local/include",
+        "<@(include_dirs)",
         "<!(node -e \"require('nan')\")"
+      ],
+      "libraries": [
+        "<@(libraries)"
       ],
       "cflags_cc": [
         "-Wall",
@@ -24,26 +27,45 @@
             "variables": {
               "include_dirs": [
                 "<!(echo %BOOST_ROOT%)"
-              ]
+              ],
+              "libraries": []
             }
           }
         ],
         [
           "OS=='linux'", {
             "variables": {
+              "include_dirs": [],
               "libraries": [
                 "-lrt"
               ]
             }
           }
+        ],
+        [
+          "OS=='mac' and '<!(uname -m)'=='arm64'", {
+            "variables": {
+              "include_dirs": [
+                "/opt/homebrew/include"
+              ],
+              "libraries": [
+                "-L/opt/homebrew/lib",
+                "-lboost_system-mt",
+                "-lboost_thread-mt"
+              ]
+            }
+          }
+        ],
+        [
+          "OS=='mac' and '<!(uname -m)'=='x86_64'", {
+            "variables": {
+              "include_dirs": [],
+              "libraries": []
+            }
+          }
         ]
       ],
       "xcode_settings": {
-        "MACOSX_DEPLOYMENT_TARGET": "10.9",
-        "OTHER_CFLAGS": [
-          "-Wno-unused-local-typedefs",
-          "-stdlib=libc++"
-        ],
         "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
         "GCC_ENABLE_CPP_RTTI": "-frtti"
       },
