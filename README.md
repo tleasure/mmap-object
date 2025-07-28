@@ -66,10 +66,24 @@ shared_object.close()
 
 // Read a file
 const read_only_shared_object = new Shared.Open('filename')
-console.log(`My value is ${read_only_shared_object.new_key}`)
-console.log(`My other value is ${read_only_shared_object.new_property}`)
+console.log('------------ Open ------------')
+console.log(`'new_key' value is: ${read_only_shared_object.new_key}`)
+console.log(`'new_property' value is: ${read_only_shared_object.new_property}`)
 
 read_only_shared_object.close()
+
+// Modify an existing file
+const mod_shared_object = new Shared.Load('filename')
+console.log('------------ Load ------------')
+mod_shared_object.new_key = 'a modified string value' // modify an existing value
+mod_shared_object.newer_key = 'a newly added string value to old file'  // add a new value
+delete mod_shared_object.new_property    // remove an existing value    
+
+console.log(`'new_key' value is: ${mod_shared_object.new_key}`)
+console.log(`'newer_key' value is: ${mod_shared_object.newer_key}`)
+console.log(`'new_property' value is: ${mod_shared_object.new_property}`)
+
+mod_shared_object.close()  // close and write changes
 ```
 
 ## API
