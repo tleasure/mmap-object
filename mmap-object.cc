@@ -677,7 +677,6 @@ v8::Local<v8::Function> SharedMap::init_methods(v8::Local<v8::FunctionTemplate> 
   return fun;
 }
 
-
 NAN_MODULE_INIT(SharedMap::Init) {
   // The mmap creator class
   v8::Local<v8::FunctionTemplate> create_tpl = Nan::New<v8::FunctionTemplate>(Create);
