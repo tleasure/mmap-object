@@ -506,9 +506,7 @@ NAN_METHOD(SharedMap::Load) {
   }
 
   Nan::Utf8String filename(Nan::To<v8::String>(info[0]).ToLocalChecked());
-  size_t file_size = (int)Nan::To<int32_t>(info[1]).FromJust();
-  file_size *= 1024;
-  size_t max_file_size = (int)Nan::To<int32_t>(info[2]).FromJust();
+  size_t max_file_size = (int)Nan::To<int32_t>(info[1]).FromJust();
   max_file_size *= 1024;
 
   struct stat buf;
