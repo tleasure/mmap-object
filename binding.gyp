@@ -19,7 +19,8 @@
         "-O3",
         "-fexceptions",
         "-frtti",
-        "-Wno-cast-function-type"
+        "-Wno-cast-function-type",
+        "-Wno-deprecated-declarations"
       ],
       "conditions": [
         [

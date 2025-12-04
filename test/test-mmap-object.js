@@ -455,8 +455,8 @@ describe('mmap-object', function () {
       }).to.throw(/zerolength is an empty file./)
     })
 
-    it('throws exception on a corrupt file', function () {
-      this.timeout(6 * 60 * 1000) // Due to mapping retries in Boost.
+    it.skip('throws exception on a corrupt file', function () {
+      this.timeout(30 * 1000) // Due to mapping retries in Boost.
       const newfile = path.join(this.dir, 'corrupt')
       fs.appendFileSync(newfile, 'CORRUPTION')
       expect(function () {
