@@ -161,17 +161,17 @@ NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
   if (self->readonly) {
     Nan::ThrowError("Read-only object.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   if (self->closed) {
     Nan::ThrowError("Cannot write to closed object.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   if (property->IsSymbol()) {
     Nan::ThrowError("Symbol properties are not supported.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   size_t data_length = sizeof(Cell);
@@ -180,7 +180,7 @@ NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
     unique_ptr<Cell> c;
     while(true) {
       try {
-        data_length += Cell::SetValue(value, self->map_seg, c, info);
+        data_length += Cell::SetValue(value, self->map_seg, c);
         v8::String::Utf8Value prop UTF8VALUE(property);
         data_length += prop.length();
         char_allocator allocer(self->map_seg->get_segment_manager());
@@ -199,8 +199,10 @@ NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
     }
   } catch(FileTooLarge&) {
     Nan::ThrowError("File grew too large.");
+    return v8::Intercepted::kNo;
   }
   info.GetReturnValue().Set(value);
+  return v8::Intercepted::kYes;
 }
 
 #define STRINGINDEX                                             \
@@ -210,26 +212,27 @@ NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
 
 NAN_INDEX_GETTER(SharedMap::IndexGetter) {
   STRINGINDEX;
-  SharedMap::PropGetter(prop, info);
+  return SharedMap::PropGetter(prop, info);
 }
 
 NAN_INDEX_SETTER(SharedMap::IndexSetter) {
   STRINGINDEX;
-  SharedMap::PropSetter(prop, value, info);
+  return SharedMap::PropSetter(prop, value, info);
 }
 
 NAN_INDEX_QUERY(SharedMap::IndexQuery) {
   STRINGINDEX;
-  SharedMap::PropQuery(prop, info);
+  return SharedMap::PropQuery(prop, info);
 }
 
 NAN_INDEX_DELETER(SharedMap::IndexDeleter) {
   STRINGINDEX;
-  SharedMap::PropDeleter(prop, info);
+  return SharedMap::PropDeleter(prop, info);
 }
 
 NAN_INDEX_ENUMERATOR(SharedMap::IndexEnumerator) {
   info.GetReturnValue().Set(Nan::New<v8::Array>(v8::None));
+  return v8::Intercepted::kYes;
 }
 
 NAN_METHOD(SharedMap::next) {
@@ -264,7 +267,7 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
   v8::String::Utf8Value src UTF8VALUE(property);
 
   if (!property->IsNull() && !property->IsSymbol() && isMethod(string(*src))) {
-    return;
+    return v8::Intercepted::kNo;
   }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
   if (property->IsSymbol()) {
@@ -281,16 +284,17 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
           info.GetReturnValue().Set(obj);
         }, info.This());
       info.GetReturnValue().Set(Nan::GetFunction(iter_template).ToLocalChecked());
+      return v8::Intercepted::kYes;
     }
     // Otherwise don't return anything on symbol accesses
-    return;
+    return v8::Intercepted::kNo;
   }
   if (string(*data) == "prototype") {
-    return;
+    return v8::Intercepted::kNo;
   }
   if (self->closed) {
     Nan::ThrowError("Cannot read from closed object.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   auto pair = self->property_map->find<char_string, hasher, s_equal_to>
@@ -298,10 +302,11 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
 
   // If the map doesn't have it, let v8 continue the search.
   if (pair == self->property_map->end())
-    return;
+    return v8::Intercepted::kNo;
 
   Cell *c = &pair->second;
   info.GetReturnValue().Set(c->GetValue());
+  return v8::Intercepted::kYes;
 }
 
 NAN_PROPERTY_QUERY(SharedMap::PropQuery) {
@@ -309,41 +314,42 @@ NAN_PROPERTY_QUERY(SharedMap::PropQuery) {
 
   if (isMethod(string(*src))) {
     info.GetReturnValue().Set(Nan::New<v8::Integer>(v8::ReadOnly | v8::DontEnum | v8::DontDelete));
-    return;
+    return v8::Intercepted::kYes;
   }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
 
   if (self->readonly) {
     info.GetReturnValue().Set(Nan::New<v8::Integer>(v8::ReadOnly | v8::DontDelete));
-    return;
+    return v8::Intercepted::kYes;
   }
 
   info.GetReturnValue().Set(Nan::New<v8::Integer>(v8::None));
+  return v8::Intercepted::kYes;
 }
 
 NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
   if (property->IsSymbol()) {
     Nan::ThrowError("Symbol properties are not supported for delete.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   v8::String::Utf8Value src UTF8VALUE(property);
 
   if (isMethod(string(*src))) {
-    info.GetReturnValue().Set(Nan::New<v8::Boolean>(v8::None));
-    return;
+    info.GetReturnValue().Set(Nan::New<v8::Boolean>(false));
+    return v8::Intercepted::kYes;
   }
 
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
 
   if (self->readonly) {
     Nan::ThrowError("Cannot delete from read-only object.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   if (self->closed) {
     Nan::ThrowError("Cannot delete from closed object.");
-    return;
+    return v8::Intercepted::kYes;
   }
 
   v8::String::Utf8Value prop UTF8VALUE(property);
@@ -351,6 +357,8 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
   char_allocator allocer(self->map_seg->get_segment_manager());
   string_key = new shared_string(string(*prop).c_str(), allocer);
   self->property_map->erase(*string_key);
+  info.GetReturnValue().Set(Nan::New<v8::Boolean>(true));
+  return v8::Intercepted::kYes;
 }
 
 NAN_PROPERTY_ENUMERATOR(SharedMap::PropEnumerator) {
