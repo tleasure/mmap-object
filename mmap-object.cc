@@ -12,6 +12,7 @@
 #include <boost/assign.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/version.hpp>
+#include <unordered_set>
 #include "cell.hpp"
 #include "common.hpp"
 
@@ -102,6 +103,9 @@ private:
   bool closed;
   PropertyHash::iterator iter;
 
+  // Track accessed keys
+  std::unordered_set<std::string> accessed_keys;
+
   void grow(size_t);
   static NAN_METHOD(Create);
   static NAN_METHOD(Open);
@@ -118,6 +122,9 @@ private:
   static NAN_METHOD(max_load_factor);
   static NAN_METHOD(fileFormatVersion);
   static NAN_METHOD(next);
+  static NAN_METHOD(get_accessed_count);
+  static NAN_METHOD(get_accessed_keys);
+  static NAN_METHOD(clear_accessed_tracking);
   static NAN_PROPERTY_SETTER(PropSetter);
   static NAN_PROPERTY_GETTER(PropGetter);
   static NAN_PROPERTY_QUERY(PropQuery);
@@ -199,7 +206,6 @@ NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
     }
   } catch(FileTooLarge&) {
     Nan::ThrowError("File grew too large.");
-    return v8::Intercepted::kNo;
   }
   info.GetReturnValue().Set(value);
   return v8::Intercepted::kYes;
@@ -286,7 +292,7 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
       info.GetReturnValue().Set(Nan::GetFunction(iter_template).ToLocalChecked());
       return v8::Intercepted::kYes;
     }
-    // Otherwise don't return anything on symbol accesses
+    // Otherwise don\'t return anything on symbol accesses
     return v8::Intercepted::kNo;
   }
   if (string(*data) == "prototype") {
@@ -304,6 +310,9 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
   if (pair == self->property_map->end())
     return v8::Intercepted::kNo;
 
+
+  // Track this key access
+  self->accessed_keys.insert(string(*src));
   Cell *c = &pair->second;
   info.GetReturnValue().Set(c->GetValue());
   return v8::Intercepted::kYes;
@@ -336,7 +345,7 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
   v8::String::Utf8Value src UTF8VALUE(property);
 
   if (isMethod(string(*src))) {
-    info.GetReturnValue().Set(Nan::New<v8::Boolean>(false));
+    info.GetReturnValue().Set(Nan::New<v8::Boolean>(v8::None));
     return v8::Intercepted::kYes;
   }
 
@@ -357,7 +366,6 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
   char_allocator allocer(self->map_seg->get_segment_manager());
   string_key = new shared_string(string(*prop).c_str(), allocer);
   self->property_map->erase(*string_key);
-  info.GetReturnValue().Set(Nan::New<v8::Boolean>(true));
   return v8::Intercepted::kYes;
 }
 
@@ -392,6 +400,29 @@ INFO_METHOD(max_load_factor, float, property_map)
 NAN_METHOD(SharedMap::fileFormatVersion) {
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
   info.GetReturnValue().Set((uint32_t)self->version);
+}
+
+NAN_METHOD(SharedMap::get_accessed_count) {
+  auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
+  info.GetReturnValue().Set((uint32_t)self->accessed_keys.size());
+}
+
+NAN_METHOD(SharedMap::get_accessed_keys) {
+  auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
+  v8::Local<v8::Array> arr = Nan::New<v8::Array>();
+
+  int i = 0;
+  for (const auto& key : self->accessed_keys) {
+    Nan::Set(arr, i++, Nan::New<v8::String>(key.c_str()).ToLocalChecked());
+  }
+
+  info.GetReturnValue().Set(arr);
+}
+
+NAN_METHOD(SharedMap::clear_accessed_tracking) {
+  auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
+  self->accessed_keys.clear();
+  info.GetReturnValue().SetUndefined();
 }
 
 NAN_METHOD(SharedMap::Create) {
@@ -514,7 +545,9 @@ NAN_METHOD(SharedMap::Load) {
   }
 
   Nan::Utf8String filename(Nan::To<v8::String>(info[0]).ToLocalChecked());
-  size_t max_file_size = (int)Nan::To<int32_t>(info[1]).FromJust();
+  size_t file_size = (int)Nan::To<int32_t>(info[1]).FromJust();
+  file_size *= 1024;
+  size_t max_file_size = (int)Nan::To<int32_t>(info[2]).FromJust();
   max_file_size *= 1024;
 
   struct stat buf;
@@ -667,6 +700,9 @@ v8::Local<v8::Function> SharedMap::init_methods(v8::Local<v8::FunctionTemplate> 
   Nan::SetPrototypeMethod(f_tpl, "load_factor", load_factor);
   Nan::SetPrototypeMethod(f_tpl, "max_load_factor", max_load_factor);
   Nan::SetPrototypeMethod(f_tpl, "fileFormatVersion", fileFormatVersion);
+  Nan::SetPrototypeMethod(f_tpl, "get_accessed_count", get_accessed_count);
+  Nan::SetPrototypeMethod(f_tpl, "get_accessed_keys", get_accessed_keys);
+  Nan::SetPrototypeMethod(f_tpl, "clear_accessed_tracking", clear_accessed_tracking);
 
   auto proto = f_tpl->PrototypeTemplate();
   Nan::SetNamedPropertyHandler(proto, PropGetter, PropSetter, PropQuery, PropDeleter, PropEnumerator,
@@ -682,6 +718,7 @@ v8::Local<v8::Function> SharedMap::init_methods(v8::Local<v8::FunctionTemplate> 
   constructor().Reset(fun);
   return fun;
 }
+
 
 NAN_MODULE_INIT(SharedMap::Init) {
   // The mmap creator class
