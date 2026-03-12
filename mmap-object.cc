@@ -105,6 +105,7 @@ private:
   void grow(size_t);
   static NAN_METHOD(Create);
   static NAN_METHOD(Open);
+  static NAN_METHOD(Load);
   static NAN_METHOD(Close);
   static NAN_METHOD(isClosed);
   static NAN_METHOD(isOpen);
@@ -498,6 +499,75 @@ NAN_METHOD(SharedMap::Open) {
   info.GetReturnValue().Set(info.This());
 }
 
+NAN_METHOD(SharedMap::Load) {
+  if (!info.IsConstructCall()) {
+    Nan::ThrowError("Load must be called as a constructor.");
+    return;
+  }
+
+  Nan::Utf8String filename(Nan::To<v8::String>(info[0]).ToLocalChecked());
+  size_t max_file_size = (int)Nan::To<int32_t>(info[1]).FromJust();
+  max_file_size *= 1024;
+
+  struct stat buf;
+  int s = stat(*filename, &buf);
+  if (s == -1 || !S_ISREG(buf.st_mode) || buf.st_size == 0) {
+    ostringstream error_stream;
+    error_stream << *filename;
+    if (s == -1) {
+      error_stream << ": " << strerror(errno);
+    } else if (!S_ISREG(buf.st_mode)) {
+      error_stream << " is not a regular file.";
+    } else {
+      error_stream << " is an empty file.";
+    }
+    Nan::ThrowError(error_stream.str().c_str());
+    return;
+  }
+
+  // Use provided max_file_size or default, but ensure it's at least as large as the current file
+  if (max_file_size == 0) {
+    max_file_size = DEFAULT_MAX_SIZE;
+  }
+  max_file_size = max(max_file_size, (size_t)buf.st_size);
+
+  SharedMap *d = new SharedMap(*filename, (size_t)buf.st_size, max_file_size);
+
+  try {
+    d->map_seg = new bip::managed_mapped_file(bip::open_only, string(*filename).c_str());
+    if (d->map_seg->get_size() != (unsigned long)buf.st_size) {
+      ostringstream error_stream;
+      error_stream << "File " << *filename << " appears to be corrupt (1).";
+      Nan::ThrowError(error_stream.str().c_str());
+      return;
+    }
+    auto find_version = d->map_seg->find<uint32_t>("version");
+    if (find_version.second == 0) {
+      d->version = 0; // No version but should be compatible with V1.
+    } else {
+      d->version = *find_version.first;
+    }
+    CHECK_VERSION(d);
+    auto find_map = d->map_seg->find<PropertyHash>("properties");
+    d->property_map = find_map.first;
+    if (d->property_map == NULL) {
+      ostringstream error_stream;
+      error_stream << "File " << *filename << " appears to be corrupt (2).";
+      Nan::ThrowError(error_stream.str().c_str());
+      return;
+    }
+  } catch(bip::interprocess_exception &ex){
+    ostringstream error_stream;
+    error_stream << "Can't open file " << *filename << ": " << ex.what();
+    Nan::ThrowError(error_stream.str().c_str());
+    return;
+  }
+  d->readonly = false;
+  d->closed = false;
+  d->Wrap(info.This());
+  info.GetReturnValue().Set(info.This());
+}
+
 void SharedMap::grow(size_t size) {
   file_size += size;
   if (file_size > max_file_size) {
@@ -617,6 +687,12 @@ NAN_MODULE_INIT(SharedMap::Init) {
   open_tpl->SetClassName(Nan::New("OpenMmap").ToLocalChecked());
   auto open_fun = init_methods(open_tpl);
   Nan::Set(target, Nan::New("Open").ToLocalChecked(), open_fun);
+
+  // The mmap loader class (for read-write access to existing files)
+  v8::Local<v8::FunctionTemplate> load_tpl = Nan::New<v8::FunctionTemplate>(Load);
+  load_tpl->SetClassName(Nan::New("LoadMmap").ToLocalChecked());
+  auto load_fun = init_methods(load_tpl);
+  Nan::Set(target, Nan::New("Load").ToLocalChecked(), load_fun);
 }
 
-NODE_MODULE(mmap_object, SharedMap::Init)
+NAN_MODULE_WORKER_ENABLED(mmap_object, SharedMap::Init)
