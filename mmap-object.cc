@@ -117,6 +117,7 @@ private:
   static NAN_METHOD(load_factor);
   static NAN_METHOD(max_load_factor);
   static NAN_METHOD(fileFormatVersion);
+  static NAN_METHOD(keys);
   static NAN_METHOD(next);
   static NAN_PROPERTY_SETTER(PropSetter);
   static NAN_PROPERTY_GETTER(PropGetter);
@@ -151,6 +152,7 @@ boost::unordered_map<std::string, bool> methodList = boost::assign::map_list_of
                                                    ("propertyIsEnumerable", true)
                                                    ("toString", true)
                                                    ("fileFormatVersion", true)
+                                                   ("keys", true)
                                                    ("valueOf", true)
     ;
 bool isMethod(string name) {
@@ -359,6 +361,20 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
   self->property_map->erase(*string_key);
   info.GetReturnValue().Set(Nan::New<v8::Boolean>(true));
   return v8::Intercepted::kYes;
+}
+
+NAN_METHOD(SharedMap::keys) {
+  auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
+  if (self->closed) {
+    Nan::ThrowError("Cannot read from closed object.");
+    return;
+  }
+  v8::Local<v8::Array> arr = Nan::New<v8::Array>();
+  uint32_t i = 0;
+  for (auto it = self->property_map->begin(); it != self->property_map->end(); ++it) {
+    Nan::Set(arr, i++, Nan::New<v8::String>(it->first.c_str()).ToLocalChecked());
+  }
+  info.GetReturnValue().Set(arr);
 }
 
 NAN_PROPERTY_ENUMERATOR(SharedMap::PropEnumerator) {
@@ -667,6 +683,7 @@ v8::Local<v8::Function> SharedMap::init_methods(v8::Local<v8::FunctionTemplate> 
   Nan::SetPrototypeMethod(f_tpl, "load_factor", load_factor);
   Nan::SetPrototypeMethod(f_tpl, "max_load_factor", max_load_factor);
   Nan::SetPrototypeMethod(f_tpl, "fileFormatVersion", fileFormatVersion);
+  Nan::SetPrototypeMethod(f_tpl, "keys", keys);
 
   auto proto = f_tpl->PrototypeTemplate();
   Nan::SetNamedPropertyHandler(proto, PropGetter, PropSetter, PropQuery, PropDeleter, PropEnumerator,
