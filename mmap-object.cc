@@ -318,6 +318,20 @@ NAN_PROPERTY_QUERY(SharedMap::PropQuery) {
   }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
 
+  // A closed object exposes no data properties.
+  if (self->closed) {
+    return v8::Intercepted::kNo;
+  }
+
+  // Only claim the property when the key actually exists in the map. Without
+  // this find, `key in obj` and hasOwnProperty() would report true for every
+  // name. Returning kNo lets V8 treat a missing key as absent.
+  auto pair = self->property_map->find<char_string, hasher, s_equal_to>
+    (*src, hasher(), s_equal_to());
+  if (pair == self->property_map->end()) {
+    return v8::Intercepted::kNo;
+  }
+
   if (self->readonly) {
     info.GetReturnValue().Set(Nan::New<v8::Integer>(v8::ReadOnly | v8::DontDelete));
     return v8::Intercepted::kYes;
