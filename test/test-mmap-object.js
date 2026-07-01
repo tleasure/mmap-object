@@ -330,6 +330,13 @@ describe('mmap-object', function () {
       expect(this.reader).to.have.keys(['first', 'second', this.bigKey, '12345', '12346', 'samekey'])
     })
 
+    it('reports key existence via `in` and hasOwnProperty', function () {
+      expect('first' in this.reader, "'first' in reader").to.be.true
+      expect('no_such_key' in this.reader, "'no_such_key' in reader").to.be.false
+      expect(this.reader.hasOwnProperty('first'), "hasOwnProperty('first')").to.be.true
+      expect(this.reader.hasOwnProperty('no_such_key'), "hasOwnProperty('no_such_key')").to.be.false
+    })
+
     it('has enumerable but read-only properties', function () {
       expect(this.reader.propertyIsEnumerable('first')).to.be.true
       expect(Object.getOwnPropertyDescriptor(this.reader, 'first').writable).to.be.false
