@@ -158,6 +158,10 @@ bool isMethod(string name) {
 }
 
 NAN_PROPERTY_SETTER(SharedMap::PropSetter) {
+  v8::String::Utf8Value data UTF8VALUE(info.Data());
+  if (string(*data) == "prototype") {
+    return v8::Intercepted::kNo;
+  }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
   if (self->readonly) {
     Nan::ThrowError("Read-only object.");
@@ -269,6 +273,12 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
   if (!property->IsNull() && !property->IsSymbol() && isMethod(string(*src))) {
     return v8::Intercepted::kNo;
   }
+  // This handler is installed on both the instance template and the
+  // prototype template (to let real prototype methods resolve). The
+  // prototype-level object is never wrapped, so bail out before Unwrap.
+  if (string(*data) == "prototype") {
+    return v8::Intercepted::kNo;
+  }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
   if (property->IsSymbol()) {
     // Handle iteration
@@ -289,9 +299,6 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
     // Otherwise don't return anything on symbol accesses
     return v8::Intercepted::kNo;
   }
-  if (string(*data) == "prototype") {
-    return v8::Intercepted::kNo;
-  }
   if (self->closed) {
     Nan::ThrowError("Cannot read from closed object.");
     return v8::Intercepted::kYes;
@@ -310,11 +317,15 @@ NAN_PROPERTY_GETTER(SharedMap::PropGetter) {
 }
 
 NAN_PROPERTY_QUERY(SharedMap::PropQuery) {
+  v8::String::Utf8Value data UTF8VALUE(info.Data());
   v8::String::Utf8Value src UTF8VALUE(property);
 
   if (isMethod(string(*src))) {
     info.GetReturnValue().Set(Nan::New<v8::Integer>(v8::ReadOnly | v8::DontEnum | v8::DontDelete));
     return v8::Intercepted::kYes;
+  }
+  if (string(*data) == "prototype") {
+    return v8::Intercepted::kNo;
   }
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
 
@@ -333,11 +344,16 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
     return v8::Intercepted::kYes;
   }
 
+  v8::String::Utf8Value data UTF8VALUE(info.Data());
   v8::String::Utf8Value src UTF8VALUE(property);
 
   if (isMethod(string(*src))) {
     info.GetReturnValue().Set(Nan::New<v8::Boolean>(false));
     return v8::Intercepted::kYes;
+  }
+
+  if (string(*data) == "prototype") {
+    return v8::Intercepted::kNo;
   }
 
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
@@ -362,6 +378,11 @@ NAN_PROPERTY_DELETER(SharedMap::PropDeleter) {
 }
 
 NAN_PROPERTY_ENUMERATOR(SharedMap::PropEnumerator) {
+  v8::String::Utf8Value data UTF8VALUE(info.Data());
+  if (string(*data) == "prototype") {
+    info.GetReturnValue().Set(Nan::New<v8::Array>());
+    return;
+  }
   v8::Local<v8::Array> arr = Nan::New<v8::Array>();
   auto self = Nan::ObjectWrap::Unwrap<SharedMap>(info.This());
 

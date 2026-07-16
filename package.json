@@ -11,7 +11,7 @@
     "module_path": "./lib",
     "host": "https://github.com/allenluce/mmap-object/releases/download/{version}"
   },
-  "version": "1.5.7",
+  "version": "1.5.8",
   "author": "Allen Luce",
   "repository": {
     "type": "git",
@@ -21,14 +21,14 @@
   "gypfile": true,
   "dependencies": {
     "async": "^3.2.4",
-    "nan": "^2.24.0",
+    "nan": "^2.28.0",
     "node-gyp": "^9.3.1",
     "node-pre-gyp": "^0.13.0"
   },
   "devDependencies": {
     "chai": "^4.3.7",
     "mkdirp": "^2.1.4",
-    "mocha": "^10.2.0",
+    "mocha": "^11.0.0",
     "node-pre-gyp-github": "^1.4.4",
     "tar": "^6.1.13",
     "temp": "^0.9.4",

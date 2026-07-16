@@ -87,7 +87,16 @@ describe('mmap-object', function () {
     it('has un-enumerable and read-only methods', function () {
       for (let method of methods) {
         expect(this.shobj.propertyIsEnumerable(method), `${method} is enumerable`).to.be.false
-        expect(delete this.shobj[method], `${method} is writable`).to.be.false
+        // Deleting a non-configurable property in strict mode should throw a
+        // TypeError. Older V8 versions returned false instead; accept either.
+        let deleted
+        try {
+          deleted = delete this.shobj[method]
+        } catch (e) {
+          expect(e, `${method} delete error`).to.be.instanceOf(TypeError)
+          continue
+        }
+        expect(deleted, `${method} is writable`).to.be.false
       }
     })
 
@@ -338,7 +347,16 @@ describe('mmap-object', function () {
     it('has un-enumerable and read-only methods', function () {
       for (let method of methods) {
         expect(this.reader.propertyIsEnumerable(method), `${method} is enumerable`).to.be.false
-        expect(delete this.reader[method], `${method} is writable`).to.be.false
+        // Deleting a non-configurable property in strict mode should throw a
+        // TypeError. Older V8 versions returned false instead; accept either.
+        let deleted
+        try {
+          deleted = delete this.reader[method]
+        } catch (e) {
+          expect(e, `${method} delete error`).to.be.instanceOf(TypeError)
+          continue
+        }
+        expect(deleted, `${method} is writable`).to.be.false
       }
     })
 
